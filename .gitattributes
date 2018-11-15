@@ -1,0 +1,66 @@
+# https://git-scm.com/docs/gitattributes
+#
+# A gitattributes file is a simple text file that gives attributes to path names.
+# Each line in gitattributes file is of form: pattern attr1 attr2 ...
+# That is, a pattern followed by an attributes list, separated by white spaces.
+# When the pattern matches the path in question, the attributes listed on the line are given to the path.
+# Each attribute can be in one of these states for a given path:
+# FIX CRLF always when developer has not set
+# Linux/Mac: git config --global core.autocrlf input
+# Windows: git config --global core.autocrlf true
+# Auto detect text files and perform LF normalization
+
+* text=auto
+* text eol=lf
+
+# git objects as text for diff
+# Ensure that the following files, and file name patterns are treated as a text files
+
+*.dockerignore text
+Dockerfile text
+*.js text
+*.json text
+*.scss text
+*.sh text eol=lf
+*.htm text
+*.html text
+*.md text
+*.options text
+*.scss text
+*.yaml text
+*.yml text
+*.txt text
+.editorconfig text
+.gitattributes text
+.gitignore text
+LICENSE text
+
+# Avoid creation of unnecessary big commit objects
+# For these files we do not want to see text diff for
+*.ai binary
+*.data binary
+*.db binary
+*.eot binary
+*.eps binary
+*.gif  binary
+*.jpeg binary
+*.jpg binary
+*.js.map* binary
+*.min.* binary minified
+*.mp3 binary
+*.mtl binary
+*.obj binary
+*.otf binary
+*.pdf binary
+*.png binary
+*.psd binary
+*.so binary
+*store binary
+*.svg binary
+*.ttf binary
+*.ttc binary
+*.wav binary
+*.woff binary
+*.woff2 binary
+*.zip binary
+*.xcf binary

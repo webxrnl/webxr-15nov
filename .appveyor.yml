@@ -1,0 +1,24 @@
+version: 0.9.{branch}.{build}.
+
+clone_depth: 10
+shallow_clone: true
+cache: '%LOCALAPPDATA%\\Yarn'
+build:
+  verbosity: minimal
+
+environment:
+  nodejs_version: "9"
+
+install:
+  - ps: Install-Product node $env:nodejs_version
+  - cp example.app-dev.json app-dev.json && cp example.app.json app.json
+  - yarn install
+
+build_script:
+  - yarn run lint
+  - yarn run build
+
+test_script:
+  - cmd: yarn run test:ci-on-windows
+
+deploy: off

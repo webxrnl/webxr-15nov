@@ -1,0 +1,128 @@
+################################################################################
+# Travis CI configuration
+# Docs: https://docs.travis-ci.com/
+# About Stages: https://docs.travis-ci.com/user/build-stages/
+#
+sudo: false
+dist: trusty
+
+# https://docs.travis-ci.com/user/notifications/
+notifications:
+  email: false
+
+# https://docs.travis-ci.com/user/caching/
+cache:
+  directories:
+    - node_modules
+  timeout: 180
+  yarn: true
+
+################################################################################
+# Templates
+templates:
+  - &tmpl-common-setup
+    # You can choose Node.js and io.js versions to run your tests
+    # by adding them to the node_js section of your .travis.yml:
+    # docs: https://docs.travis-ci.com/user/languages/javascript-with-nodejs#Choosing-Node-versions-to-test-against
+    language: node_js
+    node_js:
+      - node
+    install: yarn install
+  - &tmpl-ssh-setup
+    before_install:
+      - |
+       declare -r SSH_FILE="$(mktemp -u $HOME/.ssh/XXXXX)"
+
+       openssl aes-256-cbc \
+         -K $encrypted_f67124605cd2_key \
+         -iv $encrypted_f67124605cd2_iv \
+         -in $TRAVIS_BUILD_DIR/devel/travis_ssh_key.enc \
+         -out "$SSH_FILE" -d
+
+       chmod 600 "$SSH_FILE" \
+         && printf "%s\n" \
+              "Host github.com" \
+              "  IdentityFile $SSH_FILE" \
+              "  LogLevel ERROR" >> ~/.ssh/config
+
+       git config user.email "35643799+howibot@users.noreply.github.com"
+       git config user.name "howibot"
+
+# defaults
+before_install: skip
+install: skip
+before_script: skip
+script: skip
+after_success: skip
+after_failure: skip
+after_script: skip
+
+################################################################################
+# stages
+stages:
+  # lint and test
+  - name: lint and test
+    # if: (type = pull_request) AND (branch = master)
+    if: type IN (push, pull_request) AND (branch = master) AND (NOT tag IS present)
+  # deploy digaverse.github.io (only on tags on upstream)
+  - name: deploy
+    if: (repo = digaverse/webxr-webpack-boilerplate) AND (NOT type = pull_request) AND (tag IS present)
+
+################################################################################
+# jobs
+jobs:
+  include:
+    # verify pull request
+    - stage: lint and test
+      env: JOB_NAME=lint
+      <<: *tmpl-common-setup
+      script: yarn run lint
+
+    # # run primary tests
+    - <<: *tmpl-common-setup
+      env: JOB_NAME=test:ci-on-linux
+      script: yarn run test:ci-on-linux
+      # Do something when everything was successful!
+      after_success:
+        # For example here we upload covergae report to codacy
+        - cat ./tmp/lcov.info | node_modules/.bin/codacy-coverage --token $CODACY_PROJECT_TOKEN
+
+    - <<: *tmpl-common-setup
+      env: JOB_NAME=check:dependencies
+      script: yarn outdated
+
+    # deploy new release + npm package
+    - stage: deploy
+      <<: *tmpl-ssh-setup
+      <<: *tmpl-common-setup
+      # skip default install here
+      install: skip
+      before_script: echo "before_script https://digaverse.github.io/webxr-webpack-boilerplate"
+      script:
+        # build and prepare
+        - git checkout -b prepare-deploy $TRAVIS_TAG
+        - cp $TRAVIS_BUILD_DIR/example.app-dev.json $TRAVIS_BUILD_DIR/app-dev.json && cp $TRAVIS_BUILD_DIR/devel/deploy.app.json $TRAVIS_BUILD_DIR/app.json
+        - yarn install
+        - yarn run build
+        - mv $TRAVIS_BUILD_DIR/build $TRAVIS_BUILD_DIR/deploy
+        - cp -R $TRAVIS_BUILD_DIR/.circleci $TRAVIS_BUILD_DIR/deploy/
+        - BUILDREF="$TRAVIS_TAG :bookmark:"
+        - COMMIT_MSG="$BUILDREF ($TRAVIS_BUILD_NUMBER) commit https://github.com/digaverse/webxr-webpack-boilerplate/tree/$TRAVIS_TAG"
+        - ls -la && git status
+        - if [ ! -z "$(git status --porcelain)" ]; then git add -A && git commit -m"$COMMIT_MSG"; fi
+        - git filter-branch --prune-empty --env-filter '
+            GIT_COMMITTER_NAME="howi-bot";
+            GIT_COMMITTER_EMAIL="devops@digaverse.com";' --subdirectory-filter deploy prepare-deploy
+        # update gh-pages
+        - git remote add github/digaverse git@github.com:digaverse/webxr-webpack-boilerplate.git
+        - git fetch github/digaverse
+        - git checkout -b gh-pages github/digaverse/gh-pages
+        - find . -maxdepth 1 ! -iname .git -exec rm -rf {} \;
+        - echo "$(date --rfc-3339=ns)" > .last-deploy
+        - git add -A && git commit -m"$COMMIT_MSG"
+        - git merge prepare-deploy --squash --allow-unrelated-histories
+        - ls -la && git status
+        - if [ ! -z "$(git status --porcelain)" ]; then git add -A && git commit --amend --no-edit; fi
+        # deploy
+        - git push github/digaverse gh-pages
+      after_script: echo "after_script https://digaverse.github.io/webxr-webpack-boilerplate"
