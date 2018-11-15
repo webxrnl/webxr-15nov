@@ -5,8 +5,6 @@
 *.sw[mnop]
 .DS_Store
 *.log
-app.json
-app-dev.json
 npm-debug.log*
 package-lock.json
 devel/ssl/localhost.crt
